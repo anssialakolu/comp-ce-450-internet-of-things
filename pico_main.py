@@ -7,8 +7,8 @@ import ujson
 import math
 
 # WIFI configuration
-WIFI_SSID = "XXXXXXXXX"
-WIFI_PASSWORD = "XXXXXXX"
+WIFI_SSID = "XXXXXX"
+WIFI_PASSWORD = "XXXXXX"
 
 # MQTT configuration
 MQTT_BROKER = "broker.mqttdashboard.com"
@@ -153,7 +153,7 @@ def decode_ruuvi(payload: bytes) -> dict | None:
 
 
 # Allowed arduino pins for commands (only digital pins)
-ALLOWED_PINS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+ALLOWED_PINS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 def mqtt_callback(topic, msg):
     """
@@ -300,7 +300,7 @@ def irq(event, data):
             send_mqtt("temperature", value, MQTT_ARDUINO_TEMP_TOPIC)
         
         elif value_handle == hum_handle:
-            send_mqtt("humibity", value, MQTT_ARDUINO_HUM_TOPIC)
+            send_mqtt("humidity", value, MQTT_ARDUINO_HUM_TOPIC)
     
     # RuuviTag broadcasting
     elif event == _IRQ_SCAN_RESULT:

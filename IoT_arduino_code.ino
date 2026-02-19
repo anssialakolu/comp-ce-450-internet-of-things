@@ -21,7 +21,6 @@ BLECharacteristic cmdChar(CMD_CHAR_UUID, BLEWrite | BLEWriteWithoutResponse, 128
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial);
 
   // Initialize HTS221 sensor / stop if error
   if (!HTS.begin()) {
@@ -56,7 +55,6 @@ void setup() {
 
 void loop() {
   BLEDevice central = BLE.central();
-
   
   if (central) {
     Serial.print("Connected to gateway");
