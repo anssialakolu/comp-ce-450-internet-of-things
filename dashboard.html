@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Home Climate Dashboard</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #f1f1f1;
+    }
+
+    .page { max-width: 1200px; margin: 0 auto; }
+
+    .header {
+      background: white;
+      padding: 14px 16px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .header h1 { margin: 0; font-size: 20px; }
+    .header .subtitle { color: #555; font-size: 13px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 14px 14px 10px 14px;
+      border: 1px solid #ddd;
+    }
+
+    .card h2 { margin: 0 0 10px 0; font-size: 18px; }
+
+    .live {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+
+    .live .metric {
+      background: #fafafa;
+      border: 1px solid #eee;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    .metric .label { font-size: 12px; color: #666; margin-bottom: 6px; }
+    .metric .value { font-size: 20px; font-weight: bold; }
+
+    .last-update { font-size: 12px; color: #666; margin: 6px 0 10px 0; }
+
+    /* Heater controls (Bedroom only) */
+    .controls {
+      margin: 10px 0 0 0;
+      padding: 10px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      background: #fafafa;
+      display: grid;
+      gap: 10px;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: nowrap;
+    }
+
+    @media (max-width: 520px) { .controls-row { flex-wrap: wrap; } }
+
+    .controls .ctrl-label { font-size: 12px; color: #666; margin-bottom: 4px; }
+
+    .controls select {
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      background: white;
+      font-size: 13px;
+      min-width: 120px;
+    }
+
+    /* Toggle switch */
+    .switch { position: relative; display: inline-block; width: 48px; height: 26px; vertical-align: middle; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute; cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc; transition: .2s; border-radius: 999px;
+    }
+
+    .slider:before {
+      position: absolute; content: "";
+      height: 20px; width: 20px;
+      left: 3px; bottom: 3px;
+      background-color: white; transition: .2s; border-radius: 50%;
+    }
+
+    .switch input:checked + .slider { background-color: #28a745; }
+    .switch input:checked + .slider:before { transform: translateX(22px); }
+
+    .toggle-text { font-size: 13px; color: #333; margin-left: 8px; user-select: none; }
+
+    .heater-mid {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-width: 140px;
+      gap: 8px;
+      font-weight: bold;
+      font-size: 16px;
+      color: #111;
+      white-space: nowrap;
+    }
+
+    .heater-indicator {
+      width: 10px; height: 10px; border-radius: 50%;
+      display: inline-block;
+      background: #bbb;
+      border: 1px solid #999;
+    }
+
+    .heater-indicator.on {
+      background: #28a745;
+      border-color: #1f7a33;
+    }
+
+    canvas { width: 100% !important; height: 260px !important; }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <div class="header">
+      <h1>Home Climate Dashboard</h1>
+    </div>
+
+    <div class="grid">
+      {% for room_id, name in rooms.items() %}
+        <div class="card" id="room-{{ room_id }}">
+          <h2>{{ name }}</h2>
+
+          <div class="live">
+            <div class="metric">
+              <div class="label">Temperature</div>
+              <div class="value"><span class="temp">--</span> °C</div>
+            </div>
+
+            <div class="metric">
+              <div class="label">Humidity</div>
+              <div class="value"><span class="hum">--</span> %</div>
+            </div>
+          </div>
+
+          <div class="last-update">Last update: <span class="ts">--</span></div>
+
+          <canvas id="chart-{{ room_id }}"></canvas>
+
+          {% if room_id == "2" %}
+          <div class="controls" id="heater-controls">
+            <div class="controls-row">
+              <div>
+                <div class="ctrl-label">Heater override</div>
+                <label class="switch">
+                  <input type="checkbox" id="heaterOverride">
+                  <span class="slider"></span>
+                </label>
+                <span class="toggle-text" id="heaterOverrideText">Off</span>
+              </div>
+
+              <div class="heater-mid">
+                <span id="heaterMidText">Heater: --</span>
+                <span id="heaterIndicator" class="heater-indicator"></span>
+              </div>
+
+              <div style="text-align:right;">
+                <div class="ctrl-label">Heater ON temperature</div>
+                <select id="heaterSetpoint"></select>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <script>
+    const rooms = {{ rooms | tojson }};
+    const charts = {};
+
+    // Finland time requested as fixed UTC+2 (no DST handling)
+    const FINLAND_UTC_OFFSET_HOURS = 2;
+
+    function pad2(n) { return String(n).padStart(2, "0"); }
+
+    function parseUtcTimestamp(ts) {
+      const [datePart, timePart] = ts.split(" ");
+      const [y, m, d] = datePart.split("-").map(Number);
+      const [hh, mm, ss] = timePart.split(":").map(Number);
+      return new Date(Date.UTC(y, m - 1, d, hh, mm, ss));
+    }
+
+    function toFinlandDate(ts) {
+      const dtUtc = parseUtcTimestamp(ts);
+      const shifted = new Date(dtUtc.getTime() + FINLAND_UTC_OFFSET_HOURS * 3600 * 1000);
+      const y = shifted.getUTCFullYear();
+      const m = pad2(shifted.getUTCMonth() + 1);
+      const d = pad2(shifted.getUTCDate());
+      const hh = pad2(shifted.getUTCHours());
+      const mm = pad2(shifted.getUTCMinutes());
+      const ss = pad2(shifted.getUTCSeconds());
+      return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+    }
+
+    function toFinlandTimeOnly(ts) {
+      const dtUtc = parseUtcTimestamp(ts);
+      const shifted = new Date(dtUtc.getTime() + FINLAND_UTC_OFFSET_HOURS * 3600 * 1000);
+      const hh = pad2(shifted.getUTCHours());
+      const mm = pad2(shifted.getUTCMinutes());
+      const ss = pad2(shifted.getUTCSeconds());
+      return `${hh}:${mm}:${ss}`;
+    }
+
+    function makeChart(roomId) {
+      const ctx = document.getElementById(`chart-${roomId}`).getContext("2d");
+      charts[roomId] = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            { label: "Temperature (°C)", data: [], tension: 0.2, pointRadius: 0 },
+            { label: "Humidity (%)", data: [], tension: 0.2, pointRadius: 0, yAxisID: "y1" }
+          ]
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          plugins: { legend: { display: true } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 6 } },
+            y: { title: { display: true, text: "Temp (°C)" } },
+            y1: {
+              beginAtZero: true,
+              position: "right",
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: "Humidity (%)" },
+              min: 0,
+              max: 100
+            }
+          }
+        }
+      });
+    }
+
+    Object.keys(rooms).forEach(roomId => makeChart(roomId));
+
+    // -----------------------------
+    // Bedroom heater UI (room 2)
+    // -----------------------------
+    const STORAGE_KEYS = {
+      setpoint: "heater_setpoint_room2",   // "off" or "15".."22"
+      override: "heater_override_room2"    // "1" or "0"
+    };
+
+    function initHeaterControls() {
+      const setpointEl = document.getElementById("heaterSetpoint");
+      const overrideEl = document.getElementById("heaterOverride");
+      const overrideTextEl = document.getElementById("heaterOverrideText");
+      if (!setpointEl || !overrideEl || !overrideTextEl) return;
+
+      // dropdown: Off + 15..22
+      setpointEl.innerHTML = "";
+      const optOff = document.createElement("option");
+      optOff.value = "off";
+      optOff.textContent = "Off";
+      setpointEl.appendChild(optOff);
+
+      for (let t = 15; t <= 22; t++) {
+        const opt = document.createElement("option");
+        opt.value = String(t);
+        opt.textContent = `${t}°C`;
+        setpointEl.appendChild(opt);
+      }
+
+      // load saved UI state
+      const savedSetpoint = localStorage.getItem(STORAGE_KEYS.setpoint) || "off";
+      const savedOverride = localStorage.getItem(STORAGE_KEYS.override) || "0";
+
+      setpointEl.value = savedSetpoint;
+      overrideEl.checked = (savedOverride === "1");
+      overrideTextEl.textContent = overrideEl.checked ? "On" : "Off";
+
+      // send command on change (indicator will NOT change until confirmed via MQTT)
+      function sendCommand() {
+        const override = overrideEl.checked;
+        const setpoint = setpointEl.value; // "off" or number string
+        fetch("/api/rooms/2/heater/command", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ override, setpoint })
+        }).catch(() => {});
+      }
+
+      setpointEl.addEventListener("change", () => {
+        localStorage.setItem(STORAGE_KEYS.setpoint, setpointEl.value);
+        sendCommand();
+      });
+
+      overrideEl.addEventListener("change", () => {
+        localStorage.setItem(STORAGE_KEYS.override, overrideEl.checked ? "1" : "0");
+        overrideTextEl.textContent = overrideEl.checked ? "On" : "Off";
+        sendCommand();
+      });
+
+      // send once on load (optional)
+      sendCommand();
+    }
+
+     // Heater status UI: ONLY uses confirmed status from backend (heater_on as 0/1)
+    function updateHeaterUI(heaterOn) {
+      const midText = document.getElementById("heaterMidText");
+      const indicator = document.getElementById("heaterIndicator");
+      if (!midText || !indicator) return;
+
+      if (heaterOn === null || heaterOn === undefined) {
+        midText.textContent = "Heater: --";
+        indicator.classList.remove("on");
+        return;
+      }
+
+      const v = Number(heaterOn); // handle 0/1 or "0"/"1"
+      if (v === 1) {
+        midText.textContent = "Heater: ON";
+        indicator.classList.add("on");
+      } else if (v === 0) {
+        midText.textContent = "Heater: OFF";
+        indicator.classList.remove("on");
+      } else {
+        midText.textContent = "Heater: --";
+        indicator.classList.remove("on");
+      }
+    }
+
+
+    // -----------------------------
+    // Data refresh
+    // -----------------------------
+    async function refreshLatest() {
+      const res = await fetch("/api/rooms/latest");
+      const arr = await res.json();
+
+      arr.forEach(r => {
+        const el = document.getElementById(`room-${r.room_id}`);
+        if (!el) return;
+
+        const tempVal = (r.temperature == null) ? null : Number(r.temperature);
+        const humVal  = (r.humidity == null) ? null : Number(r.humidity);
+
+        el.querySelector(".temp").textContent = (tempVal == null) ? "--" : tempVal.toFixed(1);
+        el.querySelector(".hum").textContent  = (humVal == null) ? "--" : humVal.toFixed(1);
+        el.querySelector(".ts").textContent   = (r.timestamp == null) ? "--" : toFinlandDate(r.timestamp);
+
+        if (r.room_id === "2") {
+          updateHeaterUI(r.heater_on);
+        }
+      });
+    }
+
+    async function refreshHistory() {
+      for (const roomId of Object.keys(rooms)) {
+        const res = await fetch(`/api/rooms/${roomId}/history?limit=200`);
+        const points = await res.json();
+
+        const labels = points.map(p => toFinlandTimeOnly(p.timestamp));
+        const temps  = points.map(p => p.temperature);
+        const hums   = points.map(p => p.humidity);
+
+        const ch = charts[roomId];
+        ch.data.labels = labels;
+        ch.data.datasets[0].data = temps;
+        ch.data.datasets[1].data = hums;
+        ch.update("none");
+      }
+    }
+
+    initHeaterControls();
+    refreshLatest();
+    refreshHistory();
+
+    setInterval(refreshLatest, 2000);
+    setInterval(refreshHistory, 10000);
+  </script>
+</body>
+</html>
