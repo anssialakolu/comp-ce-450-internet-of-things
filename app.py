@@ -21,13 +21,13 @@ LOCK = threading.Lock()
 # UI commands for heater control (requested, not confirmed)
 HEATER_COMMANDS = {"2": {"override": False, "setpoint": None}}
 
-# MQTT command publishing configuration
+# MQTT command publishing
 MQTT_BROKER = "broker.mqttdashboard.com"
 MQTT_PORT = 1883
 MQTT_COMMANDS_TOPIC = "group14/commands/arduino"
 HEATER_PIN = 12
 
-# Track last command we sent to avoid spamming MQTT
+# Track last command sent
 LAST_HEATER_CMD_SENT = None
 
 
@@ -63,7 +63,7 @@ def publish_heater_command(cmd: int) -> None:
 
 def apply_heater_control(current_temp: float | None) -> None:
     """
-    Decide what we want the heater to do based on UI settings,
+    Decide what the heater should do based on UI settings,
     then publish to MQTT if needed.
     """
     with LOCK:

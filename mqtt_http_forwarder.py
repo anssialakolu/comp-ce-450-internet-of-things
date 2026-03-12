@@ -5,7 +5,7 @@ import paho.mqtt.client as mqtt
 BROKER = "broker.mqttdashboard.com"
 PORT = 1883
 
-# MQTT topics
+# topics
 TOPIC_ARDUINO_TEMP = "group14/arduino/temperature"
 TOPIC_ARDUINO_HUM  = "group14/arduino/humidity"
 TOPIC_RUUVI        = "group14/ruuvitag/measurements"
@@ -30,7 +30,6 @@ session = requests.Session()
 
 
 def post_measurement(room_id: str, temperature, humidity, heater_on=None):
-    """Send combined measurement to Flask. heater_on is optional (0/1)."""
     out = {
         "temperature": temperature,
         "humidity": humidity,
@@ -45,7 +44,6 @@ def post_measurement(room_id: str, temperature, humidity, heater_on=None):
 
 
 def try_post_bedroom():
-    """Post bedroom measurement only when we have both temp and humidity."""
     if latest_bed_temp is None or latest_bed_hum is None:
         return
     post_measurement(ROOM_BEDROOM, latest_bed_temp, latest_bed_hum, latest_bed_heater_on)
@@ -91,18 +89,18 @@ def on_message(client, userdata, msg):
         try_post_bedroom()
         return
 
-    # Bedroom humidity from Arduino (friend code publishes "humibity" typo)
+    # Bedroom humidity from Arduino
     if topic == TOPIC_ARDUINO_HUM:
         h = payload.get("humidity")
         if h is None:
-            h = payload.get("humibity")
+            h = payload.get("humibity") #typo check
         if h is None:
             return
         latest_bed_hum = h
         try_post_bedroom()
         return
 
-    # ACK used as "confirmation" for heater state
+    # ACK confirms heater state
     if topic == TOPIC_ACK:
         status = payload.get("status")
         pin = payload.get("pin")
